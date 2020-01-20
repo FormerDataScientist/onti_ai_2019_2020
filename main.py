@@ -274,6 +274,11 @@ test = test.merge(group, how='left', left_on = 'client_id', right_on='client_id'
 
 ### TF-IDF for each client
 
+## Объединяем колонки
+
+common_feats = list(set(train_target.columns).intersection(test.columns))
+train_target = train_target[common_feats + ['bins']]
+test = test[common_feats]
 
 """
      берем названия групп трат человека в один большой текст и TF-IDF + dictionary learning.
@@ -334,8 +339,8 @@ best_groups = np.array(columns2)[train_target[columns].values.argsort(axis=1)[:,
 
 percentile_spendings = np.percentile(train_target[columns].values, 95, axis=1)
 
-counts = np.zeros((30000, len(train_trans.small_group.unique())))
-ff = train_target[columns].values.argsort(axis=1)[:, ::-1].reshape(-1, len(train_trans.small_group.unique()))
+counts = np.zeros((30000, len(columns)))
+ff = train_target[columns].values.argsort(axis=1)[:, ::-1].reshape(-1, counts.shape[1])
 asdf = train_target[columns].values
 for a in tqdm(range(30000)):
     counts[a] = asdf[a, ff[a]].cumsum()
@@ -368,27 +373,17 @@ for n, grp in enumerate(combinations(counts, 2)):
 X, y = train_target.drop(columns=['client_id', 'bins']), train_target['bins']
 X, y = X.values, y.values
 
-pca_pipe = make_pipeline(
-    PCA(n_components=4, random_state=42),
-)
-
 testN = test.drop(columns = ['client_id']).values
-
-pca_pipe.fit(np.concatenate([
-    X[:, -n_tfidf_comps:],
-    testN[:, -n_tfidf_comps:]], axis=0))
 
 """
     на наборе данных X_full LightGBM начинает ухудшать свои результаты, поэтому он обучается на X_agg
 """
 
 X_agg = np.concatenate([X,
-                    pca_pipe.transform(X[:, -n_tfidf_comps:]),
                     top_groups_delta,
                     spends_svd], axis=1).astype(np.float32)
 
 X_full = np.concatenate([X,
-                    pca_pipe.transform(X[:, -n_tfidf_comps:]),
                     fourier,
                     delta_mean_year,
                     percentile_spendings.reshape(-1, 1),
@@ -421,8 +416,8 @@ best_groups = np.array(columns2)[test[columns].values.argsort(axis=1)[:, -10:]]
 
 percentile_spendings = np.percentile(test[columns].values, 95, axis=1)
 
-counts = np.zeros((20000, len(test_trans.small_group.unique())))
-ff = test[columns].values.argsort(axis=1)[:, ::-1].reshape(-1, len(test_trans.small_group.unique()))
+counts = np.zeros((20000, len(columns)))
+ff = test[columns].values.argsort(axis=1)[:, ::-1].reshape(-1, counts.shape[1])
 asdf = test[columns].values
 for a in tqdm(range(20000)):
     counts[a] = asdf[a, ff[a]].cumsum()
